@@ -127,6 +127,14 @@ def service_list(config, options={}):
         abort(500, 'Connection to Consul failed')
 
 
+def jsonify(data, pretty=False):
+    if pretty:
+        return json.dumps(data, sort_keys=True, indent=2,
+                          separators=(',', ': ')) + "\n"
+    else:
+        return json.dumps(data) + "\n"
+
+
 @error(404)
 def error404(error):
     response.content_type = 'application/json'
@@ -144,11 +152,7 @@ def index():
     if config['consul']:
         data = build_service_map(config['consul'])
         response.content_type = 'application/json'
-        if request.query.pretty:
-            return json.dumps(data, sort_keys=True, indent=2,
-                              separators=(',', ': '))
-        else:
-            return json.dumps(data)
+        return jsonify(data, request.query.pretty)
     else:
         abort(500, "Consul configuration error")
 
@@ -157,13 +161,9 @@ def index():
 def project(project):
     if config['projects'] and project in config['projects']:
         project_config = config['projects'][project]
-        data = build_service_map(project_config)
         response.content_type = 'application/json'
-        if request.query.pretty:
-            return json.dumps(data, sort_keys=True, indent=2,
-                              separators=(',', ': '))
-        else:
-            return json.dumps(data)
+        data = build_service_map(project_config)
+        return jsonify(data, request.query.pretty)
     else:
         abort(404, "Not found:  '/project/{}'".format(project))
 
@@ -172,7 +172,8 @@ def project(project):
 def services():
     if config['consul']:
         response.content_type = 'application/json'
-        return json.dumps(service_list(config['consul'], request.query))
+        data = service_list(config['consul'], request.query)
+        return jsonify(data, request.query.pretty)
     else:
         abort(500, 'Consul configuration error')
 
@@ -182,7 +183,8 @@ def services_project(project):
     if config['projects'] and project in config['projects']:
         project_config = config['projects'][project]
         response.content_type = 'application/json'
-        return json.dumps(service_list(project_config, request.query))
+        data = service_list(project_config, request.query)
+        return jsonify(data, request.query.pretty)
     else:
         abort(404, "Not found:  '/services/{}'".format(project))
 
