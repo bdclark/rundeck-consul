@@ -45,6 +45,7 @@ class ServiceMap:
         self.address_dc = {}
 
     def add(self, config, service_name, dc):
+        append_tags = config.get('append_tags', True)
         for s in consul_get(config, '/catalog/service/' + service_name, dc):
             service_name = s['ServiceName']
             name = s['Node']
@@ -55,21 +56,30 @@ class ServiceMap:
                 self.address_tags[address] = set()
             # Add "virtual" tag for service name
             self.address_tags[address].add(service_name)
-            # Append service tags to each "virtual" service
             for t in s['ServiceTags']:
-                self.address_tags[address].add("{}:{}".format(service_name, t))
+                if append_tags:
+                    # Append service tags to each "virtual" service
+                    service_tag = "{}:{}".format(service_name, t)
+                    self.address_tags[address].add(service_tag)
+                else:
+                    # add tag directly to node
+                    self.address_tags[address].add(t)
 
-    def get(self, username=None):
+    def get(self, config):
+        service_attribute = config.get('service_attribute', 'tags')
+        node_attributes = config.get('node_attributes', {})
         output = []
         for a, t in self.address_tags.iteritems():
             node = {
                 'nodename': self.address_name[a],
                 'hostname': a,
-                'tags': sorted(list(t)),
                 'datacenter': self.address_dc[a]
             }
-            if username:
-                node['username'] = username
+            # assign services to appropriate node attribute
+            node[service_attribute] = sorted(list(t))
+            # assign additional node attributes from config
+            for k, v in node_attributes.iteritems():
+                node[k] = v
             output.append(node)
         return output
 
@@ -78,7 +88,6 @@ def build_service_map(config):
     services = config.get('services', [])
     exclude = config.get('exclude', [])
     service_map = ServiceMap()
-    username = config.get('username', None)
     try:
         datacenters = get_datacenters(config)
         for dc in datacenters:
@@ -91,7 +100,7 @@ def build_service_map(config):
                     if service_name in exclude:
                         continue
                     service_map.add(config, service_name, dc)
-        return service_map.get(username)
+        return service_map.get(config)
     except requests.exceptions.ConnectionError as e:
         abort(500, 'Connection to Consul failed')
 
@@ -149,12 +158,9 @@ def error404(error):
 
 @route('/resource')
 def index():
-    if config['consul']:
-        data = build_service_map(config['consul'])
-        response.content_type = 'application/json'
-        return jsonify(data, request.query.pretty)
-    else:
-        abort(500, "Consul configuration error")
+    data = build_service_map(config)
+    response.content_type = 'application/json'
+    return jsonify(data, request.query.pretty)
 
 
 @route('/resource/<project>')
@@ -170,12 +176,9 @@ def project(project):
 
 @route('/services')
 def services():
-    if config['consul']:
-        response.content_type = 'application/json'
-        data = service_list(config['consul'], request.query)
-        return jsonify(data, request.query.pretty)
-    else:
-        abort(500, 'Consul configuration error')
+    response.content_type = 'application/json'
+    data = service_list(config, request.query)
+    return jsonify(data, request.query.pretty)
 
 
 @route('/services/<project>')
@@ -196,13 +199,10 @@ if __name__ == '__main__':
     config = {}
     with open(args.config) as fp:
         config = json.load(fp)
-    if 'app' not in config:
-        config['app'] = {}
-    if 'consul' not in config:
-        config['consul'] = {}
-    config['app'].setdefault('host', '0.0.0.0')
-    config['app'].setdefault('port', 8080)
-    config['consul'].setdefault('host', 'localhost')
-    config['consul'].setdefault('port', 8500)
-    config['consul'].setdefault('token', None)
-    run(host=config['app']['host'], port=config['app']['port'], debug=True)
+    config.setdefault('listen_host', '0.0.0.0')
+    config.setdefault('listen_port', 8080)
+    config.setdefault('debug', False)
+    config.setdefault('host', 'localhost')
+    config.setdefault('port', 8500)
+    config.setdefault('token', None)
+    run(host=config['listen_host'], port=config['port'], debug=config['debug'])

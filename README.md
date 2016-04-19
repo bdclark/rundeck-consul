@@ -3,8 +3,8 @@
 A simple Python Bottle app that presents Consul nodes and services as RunDeck
 resource and option models.
 
-*** THIS IS A WORK IN PROGRESS! *** Currently I'm only testing and using it
-internally.
+**THIS IS A WORK IN PROGRESS!**
+Currently I'm only using it internally, and it has not been throughly tested.
 
 ## Requirements
 * bottle
@@ -38,38 +38,64 @@ The configuration file is optional. If provided it should follow the format
 indicated below. If not provided the app will listen on `0.0.0.0:8080` and
 will attempt to connect to consul at `localhost:8500`.
 
-* `app` - listen address and port for this app
-* `consul`
-  * `host` `port` `token` - consul connection params
-  * `datacenters` - only include certain datacenters in resource
-  * `services` - only include certain services
-  * `exclude` - return all services except for these
+* `listen_host`, `listen_port` - listen address and port for this app
+* `host`, `port`, `token` - consul connection params
+* `datacenters` - only include certain datacenters in resource
+* `services` - only include certain services in resource
+* `exclude` - return all services except for these
+* `service_attribute` - attribute to map Consul services in Rundeck resource
+  model (defaults to `tags`)
+* `node_attributes` - map of additional attributes to map to all nodes returned
+  in the resource model (see below for examples)
+* `append_tags` - whether to append Consul tags to their respective service,
+  or to associate them directly to the node (default is `false`).  For example,
+  given a node with service `mysql` tag `master`, if `append_tags` is true the
+  node will have an attribute of `mysql:master`... or `mysql` and `master` if false.
 
-If `datacenters`, `services`, and `exclude` are not provided, queries to `/resource`
-will return all services in all datacenters.
+If `datacenters`, `services`, and `exclude` are not provided, queries to
+`/resource` (or `/resource/<project>`) will return all services in all datacenters.
 
-Example:
-```
+Example (not using multiple "projects"):
+```json
 {
-  "app": {
-    "host": "0.0.0.0",
-    "port": 8080
+  "listen_host": "0.0.0.0",
+  "listen_port": 8080,
+  "host": "localhost",
+  "port": "8500",
+  "token": "optionalsecret",
+  "datacenters": ["dc1", "dc2"],
+  "services": ["service1", "service2"],
+  "exclude": ["excluded_service1"],
+  "node_attributes": {
+    "username": "ubuntu"
   },
-  "consul": {
-    "host": "localhost",
-    "port": "8500",
-    "token": "optionalsecret",
-    "datacenters": ["dc1", "dc2"],
-    "services": ["service1", "service2"],
-    "exclude": ["excluded_service1"]
-  },
+  "service_attribute": "services",
+  "append_tags": true
+}
+```
+
+Example (multiple environments/clusters):
+```json
+{
+  "listen_host": "0.0.0.0",
+  "listen_port": 8080,
   "projects": {
     "dev": {
-      "host": "consul-dev.example.place",
-      "token": "abc123"
-      ...
+      "host": "consul-dev.example.net",
+      "token": "devsecret",
+      "node_attributes": {
+        "username": "ubuntu",
+        "environment": "dev"
+      }
+    },
+    "prod": {
+      "host": "consul-prod.example.net",
+      "token": "prodsecret",
+      "node_attributes": {
+        "username": "ubuntu",
+        "environment": "prod"
+      }
     }
-    ...
   }
 }
 ```
