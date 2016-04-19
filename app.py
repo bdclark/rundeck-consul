@@ -143,6 +143,7 @@ def error404(error):
 def index():
     if config['consul']:
         data = build_service_map(config['consul'])
+        response.content_type = 'application/json'
         if request.query.pretty:
             return json.dumps(data, sort_keys=True, indent=2,
                               separators=(',', ': '))
@@ -157,6 +158,7 @@ def project(project):
     if config['projects'] and project in config['projects']:
         project_config = config['projects'][project]
         data = build_service_map(project_config)
+        response.content_type = 'application/json'
         if request.query.pretty:
             return json.dumps(data, sort_keys=True, indent=2,
                               separators=(',', ': '))
@@ -169,6 +171,7 @@ def project(project):
 @route('/services')
 def services():
     if config['consul']:
+        response.content_type = 'application/json'
         return json.dumps(service_list(config['consul'], request.query))
     else:
         abort(500, 'Consul configuration error')
@@ -178,6 +181,7 @@ def services():
 def services_project(project):
     if config['projects'] and project in config['projects']:
         project_config = config['projects'][project]
+        response.content_type = 'application/json'
         return json.dumps(service_list(project_config, request.query))
     else:
         abort(404, "Not found:  '/services/{}'".format(project))
