@@ -1,0 +1,4 @@
+bottle==0.12.9
+consulate==0.6.0
+requests==2.9.1
+wsgiref==0.1.2
