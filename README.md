@@ -14,7 +14,14 @@ internally.
 * `/resource` - Returns a Rundeck [resource-json-v10][1] formatted resource
   model of Consul nodes and services.
 * `/option/services` - Returns a simple [json-formatted][2] list of Consul services
-  for use as a Rundeck option model provider.
+  for use as a Rundeck option model provider. The following optional parameters are
+  allowed (and multiple can be used together):
+  * `tag` - return services that have a given tag
+  * `tags` - return all services matching (comma-separated) list of tags
+  * `dc` - return services in a given datacenter
+  * `startswith` - return services that start with given string
+  * `contains` - return services that contain the given string
+  * `endswith` - only return services that contain a given string
 
 ##### Project-specific endpoints
 Optional projects can be configured (for example multiple consul clusters
