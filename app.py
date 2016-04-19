@@ -62,21 +62,19 @@ class ServiceMap:
                     service_tag = "{}:{}".format(service_name, t)
                     self.address_tags[address].add(service_tag)
                 else:
-                    # add tag directly to node
+                    # add service tags directly to node
                     self.address_tags[address].add(t)
 
     def get(self, config):
-        service_attribute = config.get('service_attribute', 'tags')
         node_attributes = config.get('node_attributes', {})
         output = []
         for a, t in self.address_tags.iteritems():
             node = {
                 'nodename': self.address_name[a],
                 'hostname': a,
+                'tags': sorted(list(t)),
                 'datacenter': self.address_dc[a]
             }
-            # assign services to appropriate node attribute
-            node[service_attribute] = sorted(list(t))
             # assign additional node attributes from config
             for k, v in node_attributes.iteritems():
                 node[k] = v
@@ -205,4 +203,6 @@ if __name__ == '__main__':
     config.setdefault('host', 'localhost')
     config.setdefault('port', 8500)
     config.setdefault('token', None)
-    run(host=config['listen_host'], port=config['port'], debug=config['debug'])
+    run(host=config['listen_host'],
+        port=config['listen_port'],
+        debug=config['debug'])

@@ -43,14 +43,12 @@ will attempt to connect to consul at `localhost:8500`.
 * `datacenters` - only include certain datacenters in resource
 * `services` - only include certain services in resource
 * `exclude` - return all services except for these
-* `service_attribute` - attribute to map Consul services in Rundeck resource
-  model (defaults to `tags`)
 * `node_attributes` - map of additional attributes to map to all nodes returned
   in the resource model (see below for examples)
 * `append_tags` - whether to append Consul tags to their respective service,
   or to associate them directly to the node (default is `false`).  For example,
-  given a node with service `mysql` tag `master`, if `append_tags` is true the
-  node will have an attribute of `mysql:master`... or `mysql` and `master` if false.
+  given a Consul node with service `mysql` & tag `master`, if `append_tags` is
+  true the node will have an attribute of `mysql:master`... or `mysql` and `master` if false.
 
 If `datacenters`, `services`, and `exclude` are not provided, queries to
 `/resource` (or `/resource/<project>`) will return all services in all datacenters.
@@ -69,7 +67,6 @@ Example (not using multiple "projects"):
   "node_attributes": {
     "username": "ubuntu"
   },
-  "service_attribute": "services",
   "append_tags": true
 }
 ```
