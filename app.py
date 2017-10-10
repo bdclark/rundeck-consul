@@ -198,7 +198,7 @@ if __name__ == '__main__':
     with open(args.config) as fp:
         config = json.load(fp)
     config.setdefault('listen_host', '0.0.0.0')
-    config.setdefault('listen_port', 8080)
+    config.setdefault('listen_port', os.getenv('RUNDECK_CONSUL_PORT', 8080))
     config.setdefault('debug', False)
     config.setdefault('host', 'localhost')
     config.setdefault('port', 8500)
