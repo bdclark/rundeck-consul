@@ -13,6 +13,7 @@ RUN set -ex \
   && apk del .install-deps
 
 RUN apk add --no-cache su-exec \
+  && adduser -SH rundeck-consul \
   && pip install \
     bottle \
     python-consul
