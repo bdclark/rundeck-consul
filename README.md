@@ -13,7 +13,7 @@ Currently I'm only using it internally, and it has not been throughly tested.
 ## Endpoints
 * `/resource` - Returns a Rundeck [resource-json-v10][1] formatted resource
   model of Consul nodes and services.
-* `/option/services` - Returns a simple [json-formatted][2] list of Consul services
+* `/services` - Returns a simple [json-formatted][2] list of Consul services
   for use as a Rundeck option model provider. The following optional parameters are
   allowed (and multiple can be used together):
   * `tag` - return services that have a given tag
@@ -27,7 +27,7 @@ Currently I'm only using it internally, and it has not been throughly tested.
 Optional projects can be configured (for example multiple consul clusters
 or environments):
 * `/resource/<project>`
-* `/option/services/<project>`
+* `/services/<project>`
 
 ## Running
 Run `./app.py`, or if using a configuration file (see below),

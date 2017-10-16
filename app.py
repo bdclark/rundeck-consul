@@ -129,7 +129,7 @@ def service_list(config, options={}):
                 if contains and contains not in s:
                     continue
                 output.append(s)
-        return output
+        return sorted(output)
     except requests.exceptions.ConnectionError:
         abort(500, 'Connection to Consul failed')
 
