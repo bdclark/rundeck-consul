@@ -80,7 +80,7 @@ class ServiceMap:
 
 
 def build_service_map(config):
-    consul = consul_client(config.get('consul', {}))
+    consul = consul_client(config)
     services = config.get('services', [])
     exclude = config.get('exclude', [])
     service_map = ServiceMap(config, consul)
@@ -104,7 +104,7 @@ def build_service_map(config):
 
 # (filtered) list of services from Consul
 def service_list(config, options={}):
-    consul = consul_client(config.get('consul', {}))
+    consul = consul_client(config)
     tag = options.get('tag')
     tags = options.get('tags').split(',') if options.get('tags') else []
     startswith = options.get('startswith')
