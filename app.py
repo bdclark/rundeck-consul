@@ -1,53 +1,50 @@
-#!/usr/bin/env python
-
-import os
-import bottle
-from bottle import route, run, error, abort, response, request
 import argparse
 import json
-import requests
+import os
+import re
+import urllib.parse
+import consul as consulapi
+from bottle import route, run, error, abort, response, request
+import logging
 
-
-def consul_get(config, endpoint, dc=None):
-    try:
-        host = config.get('host', 'localhost')
-        port = config.get('port', 8500)
-        token = config.get('token', None)
-        url = "http://{}:{}/v1{}".format(host, port, endpoint)
-        payload = {'token': token, 'dc': dc}
-        # print "consul request - url: {} payload: {}".format(url, payload)
-        r = requests.get(url, params=payload)
-        r.raise_for_status()
-        return r.json()
-    except requests.exceptions.ConnectionError as e:
-        abort(500, "Connection to Consul at {} failed".format(url))
-    except requests.exceptions.HTTPError as e:
-        abort(r.status_code, "Consul error: {}".format(r.text))
-
-
-def get_datacenters(config, dc=None):
-    return consul_get(config, '/catalog/datacenters', dc)
+logging.basicConfig(level=os.environ.get("LOGLEVEL", "INFO"))
 
 
 # if dc specificied, return as list, otherwise get datacenters from config
 # if none in config, return all datacenters
-def get_datacenters(config, dc=None):
+def get_datacenters(consul, dc=None):
     datacenters = [dc] if dc else config.get('datacenters', [])
     if not datacenters:
-        datacenters = consul_get(config, '/catalog/datacenters')
+        datacenters = consul.catalog.datacenters()
     return datacenters
 
 
+# get an instance of a Consul client based on configuration object
+def consul_client(config={}):
+    config.setdefault('consul', {})
+    return consulapi.Consul(
+        host=config['consul'].get('host', '127.0.0.1'),
+        port=config['consul'].get('port', 8500),
+        token=config['consul'].get('token', None),
+        scheme=config['consul'].get('scheme', 'http'),
+        verify=config['consul'].get('verify', True),
+        cert=config['consul'].get('cert', None),
+    )
+
+
 class ServiceMap:
-    def __init__(self):
+    def __init__(self, config, consul):
+        self.config = config
+        self.consul = consul
         self.address_name = {}
         self.address_tags = {}
         self.address_dc = {}
 
-    def add(self, config, service_name, dc):
-        append_tags = config.get('append_tags', True)
-        for s in consul_get(config, '/catalog/service/' + service_name, dc):
-            service_name = s['ServiceName']
+    def add(self, service_name, dc):
+        append_tags = self.config.get('append_tags', True)
+        _, instances = self.consul.catalog.service(service_name, dc=dc)
+        for s in instances:
+            # service_name = s['ServiceName']
             name = s['Node']
             address = s['Address']
             self.address_name[address] = name
@@ -65,10 +62,10 @@ class ServiceMap:
                     # add service tags directly to node
                     self.address_tags[address].add(t)
 
-    def get(self, config):
-        node_attributes = config.get('node_attributes', {})
+    def get(self):
+        node_attributes = self.config.get('node_attributes', {})
         output = []
-        for a, t in self.address_tags.iteritems():
+        for a, t in self.address_tags.items():
             node = {
                 'nodename': self.address_name[a],
                 'hostname': a,
@@ -76,48 +73,53 @@ class ServiceMap:
                 'datacenter': self.address_dc[a]
             }
             # assign additional node attributes from config
-            for k, v in node_attributes.iteritems():
+            for k, v in node_attributes.items():
                 node[k] = v
             output.append(node)
         return output
 
 
 def build_service_map(config):
+    consul = consul_client(config.get('consul', {}))
     services = config.get('services', [])
     exclude = config.get('exclude', [])
-    service_map = ServiceMap()
+    service_map = ServiceMap(config, consul)
     try:
-        datacenters = get_datacenters(config)
+        datacenters = get_datacenters(consul)
         for dc in datacenters:
             if services:
                 for i in services:
-                    service_map.add(config, i, dc)
+                    service_map.add(i, dc)
             else:
-                dc_services = consul_get(config, '/catalog/services', dc)
-                for service_name, tags in dc_services.iteritems():
+                _, dc_services = consul.catalog.services(dc=dc)
+                for service_name, tags in dc_services.items():
                     if service_name in exclude:
                         continue
-                    service_map.add(config, service_name, dc)
-        return service_map.get(config)
-    except requests.exceptions.ConnectionError as e:
-        abort(500, 'Connection to Consul failed')
+                    service_map.add(service_name, dc)
+        return service_map.get()
+    except Exception as e:
+        logging.exception(e)
+        abort(500, e)
 
 
 # (filtered) list of services from Consul
 def service_list(config, options={}):
+    consul = consul_client(config.get('consul', {}))
     tag = options.get('tag')
-    tags = options.get('tags')
-    tags = tags.split(',') if tags else []
+    tags = options.get('tags').split(',') if options.get('tags') else []
     startswith = options.get('startswith')
     endswith = options.get('endswith')
     contains = options.get('contains')
     datacenter = options.get('dc')
+    regex = options.get('regex')
+    if regex:
+        regex = urllib.parse.unquote(options.get('regex'))
     try:
-        datacenters = get_datacenters(config, datacenter)
+        datacenters = get_datacenters(consul, datacenter)
         output = []
         for dc in datacenters:
-            dc_services = consul_get(config, '/catalog/services', dc)
-            for s, t in dc_services.iteritems():
+            idx, dc_services = consul.catalog.services(dc=dc)
+            for s, t in dc_services.items():
                 if tags and not set(tags) & set(t):
                     continue
                 if tag and tag not in t:
@@ -128,10 +130,13 @@ def service_list(config, options={}):
                     continue
                 if contains and contains not in s:
                     continue
+                if regex and not re.search(regex, s):
+                    continue
                 output.append(s)
         return sorted(output)
-    except requests.exceptions.ConnectionError:
-        abort(500, 'Connection to Consul failed')
+    except Exception as e:
+        logging.exception(e)
+        abort(500, e)
 
 
 def jsonify(data, pretty=False):
@@ -149,9 +154,15 @@ def error404(error):
 
 
 @error(500)
-def error404(error):
+def error500(error):
     response.content_type = 'application/json'
     return json.dumps({'status': 'error', 'code': 500, 'message': error.body})
+
+
+@route('/heartbeat')
+def heartbeat():
+    response.status = 204
+    return
 
 
 @route('/resource')
@@ -192,17 +203,15 @@ def services_project(project):
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument('config', metavar='PATH', help='path to config file')
+    parser.add_argument('--config', metavar='PATH', help='path to config file')
+    parser.add_argument('--debug', action='store_true', help='enable debug')
     args = parser.parse_args()
+
     config = {}
-    with open(args.config) as fp:
-        config = json.load(fp)
-    config.setdefault('listen_host', '0.0.0.0')
-    config.setdefault('listen_port', os.getenv('RUNDECK_CONSUL_PORT', 8080))
-    config.setdefault('debug', False)
-    config.setdefault('host', 'localhost')
-    config.setdefault('port', 8500)
-    config.setdefault('token', None)
-    run(host=config['listen_host'],
-        port=config['listen_port'],
-        debug=config['debug'])
+    if args.config:
+        with open(args.config) as fp:
+            config = json.load(fp)
+
+    run(host=config.get('host', '0.0.0.0'),
+        port=config.get('port', os.getenv('RUNDECK_CONSUL_PORT', 8080)),
+        debug=args.debug)
