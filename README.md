@@ -8,7 +8,7 @@ Currently I'm only using it internally, and it has not been throughly tested.
 
 ## Requirements
 * bottle
-* requests
+* python-consul
 
 ## Endpoints
 * `/resource` - Returns a Rundeck [resource-json-v10][1] formatted resource
@@ -22,6 +22,7 @@ Currently I'm only using it internally, and it has not been throughly tested.
   * `startswith` - return services that start with given string
   * `contains` - return services that contain the given string
   * `endswith` - only return services that contain a given string
+  * `regex` - return services matching regex pattern (accepts URL-encoded string)
 
 ##### Project-specific endpoints
 Optional projects can be configured (for example multiple consul clusters
@@ -31,15 +32,22 @@ or environments):
 
 ## Running
 Run `./app.py`, or if using a configuration file (see below),
-`./app.py /path/to/config.json`. How to keep it running is up to you.
+`./app.py --config /path/to/config.json`. How to keep it running is up to you.
 
 ## Configuration File
 The configuration file is optional. If provided it should follow the format
 indicated below. If not provided the app will listen on `0.0.0.0:8080` and
-will attempt to connect to consul at `localhost:8500`.
+will attempt to connect to consul at `127.0.0.1:8500`.
 
-* `listen_host`, `listen_port` - listen address and port for this app
-* `host`, `port`, `token` - consul connection params
+* `host` - listen address for server (default: `0.0.0.0`)
+* `port` - listen port for server (default: `8080`)
+* `consul` - dictionary of the following Consul connection parameters:
+  * `host` - consul host (default: `127.0.0.1`)
+  * `port` - consul host (default: `8500`)
+  * `token` - consul token (default: `None`)
+  * `scheme` - consul HTTP(S) connection scheme (default: `http`)
+  * `verify` - whether to verify TLS cert (default: `True`)
+  * `cert` - consul TLS certificate (default: `None`)
 * `datacenters` - only include certain datacenters in resource
 * `services` - only include certain services in resource
 * `exclude` - return all services except for these
@@ -56,11 +64,13 @@ If `datacenters`, `services`, and `exclude` are not provided, queries to
 Example (not using multiple "projects"):
 ```json
 {
-  "listen_host": "0.0.0.0",
-  "listen_port": 8080,
-  "host": "localhost",
-  "port": "8500",
-  "token": "optionalsecret",
+  "host": "0.0.0.0",
+  "port": 8080,
+  "consul": {
+    "host": "localhost",
+    "port": "8500",
+    "token": "optionalsecret"
+  },
   "datacenters": ["dc1", "dc2"],
   "services": ["service1", "service2"],
   "exclude": ["excluded_service1"],
@@ -74,20 +84,24 @@ Example (not using multiple "projects"):
 Example (multiple environments/clusters):
 ```json
 {
-  "listen_host": "0.0.0.0",
-  "listen_port": 8080,
+  "host": "0.0.0.0",
+  "port": 8080,
   "projects": {
     "dev": {
-      "host": "consul-dev.example.net",
-      "token": "devsecret",
+      "consul": {
+        "host": "consul-dev.example.net",
+        "token": "devsecret"
+      },
       "node_attributes": {
         "username": "ubuntu",
         "environment": "dev"
       }
     },
     "prod": {
-      "host": "consul-prod.example.net",
-      "token": "prodsecret",
+      "consul": {
+        "host": "consul-prod.example.net",
+        "token": "prodsecret"
+      },
       "node_attributes": {
         "username": "ubuntu",
         "environment": "prod"
